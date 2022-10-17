@@ -1,0 +1,144 @@
+library(tidyverse)
+rm(list = ls())
+
+# 데이터 불러오기  
+
+mo <-  read.csv("https://raw.githubusercontent.com/waterfirst/uv-visible-nir-spectroscopy/main/transmittance_spectrum.csv")
+
+mo <-  read.csv("D:/Non_Documents/AI/R/data/Mo_thickness.csv")
+
+
+# 데이터 전처리  
+
+mo %>% pivot_longer(-wavelength, 
+names_to = c("glass_number", "metal_thickness"), 
+names_sep="_" , 
+names_prefix = "X.",
+names_transform = list(metal_thickness = as.integer)) %>%
+  group_by(metal_thickness, wavelength) %>% 
+  summarise(transmittance = mean(value)) -> mo_df
+
+# 시각화  
+
+## 파장에 따른 다양한 metal 두께에서 투과율  
+
+mo_df%>% 
+  mutate(metal_thickness = as.factor(metal_thickness)) %>% 
+  ggplot(aes(x=wavelength, y=transmittance, col=metal_thickness))+geom_point()+
+  scale_x_continuous(breaks=seq(300, 900, 100))+
+  labs(title = "Transmittance of various Mo metal thickness",
+       subtitle = "Mo thickness : 300Å, 500Å, 800Å, 2500Å",
+       x = "Wavelength[nm]",
+       y = "Transmittance[%]")+
+  theme_classic()
+
+
+## 900nm에서 metal 두께에서 투과율
+
+l <- c()
+fancy_scientific <- function(l) {
+  # turn in to character string in scientific notation
+  l <- format(l, scientific = TRUE)
+  # quote the part before the exponent to keep all the digits
+  l <- gsub("^(.*)e", "'\\1'e", l)
+  # turn the 'e+' into plotmath format
+  l <- gsub("e", "%*%10^", l)
+  # return this as an expression
+  parse(text=l)
+}
+
+
+mo_df%>% 
+  filter(wavelength == 900) -> mo_900
+
+
+
+good_model <- glm(transmittance ~ metal_thickness, family = gaussian(link = 'log'), data = mo_900)
+new_df <- data.frame(metal_thickness = seq(min(mo_900$metal_thickness), max(mo_900$metal_thickness), length = 500))
+new_df$transmittance <- predict(good_model, newdata = new_df, type = 'response')
+
+
+new_df %>% 
+  # reshape to long form for ggplot
+  ggplot(aes(metal_thickness    , transmittance)) + 
+  geom_line()+
+  # plot original points on top
+  geom_point(data=mo_900 %>% select(-2))+
+  labs(title = "Transmittance of various Mo metal thickness at 900nm wavelength",
+       subtitle = "Mo thickness : 300Å, 500Å, 800Å, 2500Å",
+       x = "Wavelength[nm]",
+       y = "Transmittance[%]")+
+  theme_classic()
+
+
+
+
+## 선형, 로그 회귀분석
+
+lm.model <-lm(transmittance ~ metal_thickness, mo_900)
+log.model <-lm(log(transmittance) ~ metal_thickness, mo_900)
+
+
+glance_lm <- broom::glance(lm.model)
+glance_log <- broom::glance(log.model)
+
+tidy_lm <- broom::tidy(lm.model)
+tidy_log <- broom::tidy(log.model)
+
+
+
+
+equ_lm <- paste0('선형모델 : y = ', round(tidy_lm$estimate[2], 2), 'x + ', round(tidy_lm$estimate[1], 2), ', R\u00B2', ' = ',round(glance_lm$r.squared, 3))
+
+equ_log <- paste0('로그모델 : y = ', round(tidy_log$estimate[2], 2), 'x + ', round(tidy_log$estimate[1], 2), ', R\u00B2', ' = ',round(glance_log$r.squared, 3))
+
+
+
+mo_900%>% 
+  ggplot(aes(x=metal_thickness, y=transmittance))+geom_point()+
+  #scale_y_continuous(labels=fancy_scientific)+
+  ## 선형모델 회귀선 생성
+  geom_smooth(aes(x = metal_thickness, y = transmittance, color = '선형모델'), se = F, method = 'lm') +
+  scale_color_manual(name = NULL, values = c('선형모델' = '#4169E1'), labels = c(equ_lm)) +
+  theme(text = element_text(size = 20), 
+        strip.text.x = element_blank(),
+        strip.background = element_rect(colour="white", fill="white"),
+        legend.position=c(.55,.9), 
+        legend.background = element_rect(fill = NA), 
+        legend.key = element_rect(fill = NA), 
+        plot.title = element_text(size = rel(2), family = 'NanumBarunGothicBold', hjust = 0.5),
+        plot.subtitle = element_text(vjust = 0.5, family = 'NanumBarunGothic', color = 'grey30'),
+        axis.line = element_blank(), 
+        plot.background = element_rect(fill = '#FFFAFA'), 
+        panel.background = element_rect(fill = '#FFFAFA'), 
+        plot.margin = margin(0.025, 0.01, 0.01, 0.01, "npc"), 
+        plot.caption = element_text(color = 'grey50', hjust = 1)
+  )
+  
+
+mo_900%>% 
+  ggplot(aes(x=metal_thickness, y=transmittance))+geom_point()+
+  scale_y_continuous(trans='log10', labels=fancy_scientific)+
+
+    ## 로그모델 회귀선 생성
+  geom_smooth(aes(x = metal_thickness, y = transmittance, color = '로그모델'), se = F, method = 'lm') + 
+  scale_color_manual(name = NULL, values = c('로그모델' = '#FA8072'), labels = c(equ_log)) +
+  theme(text = element_text(size = 20), 
+        strip.text.x = element_blank(),
+        strip.background = element_rect(colour="white", fill="white"),
+        legend.position=c(0.55,.9), 
+        legend.background = element_rect(fill = NA), 
+        legend.key = element_rect(fill = NA), 
+        plot.title = element_text(size = rel(2), family = 'NanumBarunGothicBold', hjust = 0.5),
+        plot.subtitle = element_text(vjust = 0.5, family = 'NanumBarunGothic', color = 'grey30'),
+        axis.line = element_blank(), 
+        plot.background = element_rect(fill = '#FFFAFA'), 
+        panel.background = element_rect(fill = '#FFFAFA'), 
+        plot.margin = margin(0.025, 0.01, 0.01, 0.01, "npc"), 
+        plot.caption = element_text(color = 'grey50', hjust = 1)
+  )
+
+
+
+
+
