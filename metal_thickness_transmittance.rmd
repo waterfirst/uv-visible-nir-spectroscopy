@@ -3,9 +3,9 @@ rm(list = ls())
 
 # 데이터 불러오기  
 
-mo <-  read.csv("https://raw.githubusercontent.com/waterfirst/uv-visible-nir-spectroscopy/main/transmittance_spectrum.csv")
+mo <-  read.delim("https://raw.githubusercontent.com/waterfirst/uv-visible-nir-spectroscopy/main/transmittance_spectrum.csv")
 
-mo <-  read.csv("D:/Non_Documents/AI/R/data/Mo_thickness.csv")
+#mo <-  read.csv("D:/Non_Documents/AI/R/data/Mo_thickness.csv")
 
 
 # 데이터 전처리  
